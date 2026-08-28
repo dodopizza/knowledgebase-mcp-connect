@@ -372,41 +372,89 @@ revoked token» — хотя токен валидный и права на ме
 
 **Claude Desktop** подключает MCP-серверы только локально по STDIO.
 Встроенные Custom Connectors принимают лишь URL и OAuth — кастомных
-заголовков там нет, поэтому с персональным токеном туда можно попасть
-только через локальный прокси-мост `mcp-remote` по `npx` (нужен
-установленный Node.js 18 или новее): он транслирует STDIO в HTTP-запросы
-к серверу и передаёт заголовки как переменные окружения (`env`).
+заголовков там нет. Поэтому нужен локальный прокси-мост `mcp-remote` по
+`npx` (нужен установленный Node.js 18 или новее): он транслирует STDIO в
+HTTP-запросы к серверу.
+
+> **Просто вписать `type`, `url` и `headers`, как у других клиентов, нельзя.**
+> Схема записи в `claude_desktop_config.json` требует `command`, а полей
+> `url` и `headers` в ней нет вовсе. Приложение выбросит такую запись и
+> покажет диалог «…are not valid MCP server configurations and were
+> skipped» — сервер просто не появится в списке.
+
+> **Заголовки, положенные в `env`, тоже не работают.** `mcp-remote` берёт
+> их только из аргументов `--header`, а `env` служит источником значения для
+> подстановки внутрь такого аргумента. Если написать `Authorization` прямо в
+> `env`, заголовок не уйдёт, сервер ответит `401`, а `mcp-remote` в ответ на
+> 401 запустит OAuth-дискавери — и вы увидите ошибку про OAuth, хотя токен
+> верный и дело совсем не в нём.
 
 Конфиг `claude_desktop_config.json`:
 
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 
+Рабочий блок целиком:
+
 ```json
 {
   "mcpServers": {
     "knowledgebase": {
-      "type": "stdio",
       "command": "npx",
       "args": [
         "-y",
-        "mcp-remote",
-        "https://knowledgebase.dodois.io/mcp"
+        "mcp-remote@0.1.39",
+        "https://knowledgebase.dodois.io/mcp",
+        "--transport", "http-only",
+        "--header", "Authorization:${AUTH_HEADER}",
+        "--header", "Mcp-Mode: Write",
+        "--header", "Mcp-Write-Spaces: SPACE_ID_1,SPACE_ID_2"
       ],
       "env": {
-        "Authorization": "Bearer <MCP_TOKEN>",
-        "Mcp-Mode": "Write",
-        "Mcp-Write-Spaces": "SPACE_ID_1,SPACE_ID_2"
+        "AUTH_HEADER": "Bearer <MCP_TOKEN>"
       }
     }
   }
 }
 ```
 
-На Windows, если `npx` не находится, в `claude_desktop_config.json` может
-понадобиться отдельная настройка на верхнем уровне файла (рядом с
-`mcpServers`): `"isUsingBuiltInNodeForMcp": false` — чтобы Claude Desktop
-использовал системный Node.js вместо встроенного.
+Подставить нужно ровно одну строку — `<MCP_TOKEN>`; слово `Bearer` уже на
+месте, второй раз его писать не надо. Если файл уже есть и в нём другие
+серверы, добавьте `"knowledgebase"` внутрь существующего `"mcpServers"`, а не
+заменяйте блок целиком. Нужен read-only — удалите строки `Mcp-Mode` и
+`Mcp-Write-Spaces` вместе с их `"--header",`.
+
+Четыре детали, без которых не заводится:
+
+- **`Authorization:${AUTH_HEADER}` — без пробела после двоеточия.** У Claude
+  Desktop на Windows и у Cursor пробелы внутри `args` не экранируются при
+  вызове `npx`, и значение ломается; в переменной окружения пробел безопасен.
+  Побочная польза: токен не попадает в аргументы процесса и не виден в `ps`.
+- **Версия пакета зафиксирована.** `mcp-remote` без версии тянет `latest` при
+  каждом запуске — а через него идёт ваш токен. `0.1.39` — последний релиз
+  исходного автора, уже после того, как в 0.1.16 закрыли уязвимость с
+  выполнением команд.
+- **`--transport http-only`** — наш эндпоинт Streamable HTTP; без флага
+  клиент дополнительно пробует устаревший SSE.
+- **Если приложение не находит `npx`** — пропишите в `command` абсолютный
+  путь (`which npx` в терминале, например `/usr/local/bin/npx`). Приложение,
+  запущенное из Dock или меню «Пуск», не читает ваш `~/.zshrc`, поэтому
+  установленную через `nvm` версию Node оно не увидит. На Windows иногда
+  помогает ещё `"isUsingBuiltInNodeForMcp": false` на верхнем уровне файла,
+  рядом с `mcpServers`.
+
+После правки выйдите из приложения полностью (`Cmd+Q` на macOS, выход из
+трея на Windows) — просто закрыть окно недостаточно — и запустите заново.
+
+**Если видите ошибку про OAuth** — почините конфиг и удалите кэш авторизации
+`mcp-remote`, иначе он продолжит ходить в OAuth по старой памяти:
+`rm -rf ~/.mcp-auth` (Windows — каталог `%USERPROFILE%\.mcp-auth`), затем
+перезапустите Claude Desktop.
+
+> **Осознайте компромисс.** `mcp-remote` — сторонний npm-пакет, не продукт
+> Anthropic, и ваш токен идёт через него. Мы фиксируем версию, но для Claude
+> Desktop всё равно разумно завести отдельный токен и по возможности
+> read-only. Нормальное решение — OAuth, которого у сервера пока нет.
 
 ### Другой MCP-клиент (общий случай)
 
