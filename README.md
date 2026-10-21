@@ -69,7 +69,7 @@ https://knowledgebase.dodois.io/mcp
 
 По умолчанию подключение работает **только на чтение** — это безопасный
 дефолт. Чтобы включить инструменты записи (`create_content`,
-`update_content`, `delete_content`, `upload_image`), добавьте HTTP-заголовок:
+`create_sub_content`, `update_content`, `delete_content`, `upload_image`), добавьте HTTP-заголовок:
 
 ```
 Mcp-Mode: Write
@@ -134,14 +134,16 @@ https://knowledgebase.dodois.io/next/space/3f2a9c14-7b10-4d55-9c31-6ae0f8b21d47
 | `current_user` | Кто я (id, имя, email владельца токена) | |
 | `get_spaces` | Список пространств с правами (reader/writer) | |
 | `get_space_content` | Оглавление пространства (статьи, статусы, темы) | |
+| `get_space_tree` | Дерево страниц пространства с id, родителем и порядком | |
 | `get_content` | Статья по id (Markdown + метаданные) | |
 | `search_content` | Полнотекстовый поиск по статьям | |
 | `search_in_content` | Отрывок из нужного места одной статьи — для тех, что не стоит читать целиком | |
 | `get_announcements` | Лента последних опубликованных статей | |
 | `preview_content` | Dry-run конвертации Markdown, ничего не сохраняет | |
 | `create_content` | Создать статью в пространстве | ✅ |
+| `create_sub_content` | Создать пустую вложенную страницу под родителем | ✅ |
 | `update_content` | Частично обновить статью | ✅ |
-| `delete_content` | Удалить статью (soft-delete) | ✅ |
+| `delete_content` | Удалить статью (soft-delete); ветку — после подтверждения перечня | ✅ |
 | `upload_image` | Загрузить картинку (base64 или https-URL) в медиасервис и получить CDN-URL для `![подпись](url)` | ✅ |
 
 **Как читать найденную статью:** результаты `search_content` несут флаг `CanReadFully`.
